@@ -1,4 +1,7 @@
+#!/usr/bin/evn python3
+
 from urllib.request import Request, urlopen
+import ssl
 import base64
 import json
 import os
@@ -26,6 +29,7 @@ class plexInfluxdbCollector():
         self.config = configManager(silent, config=config)
 
         self.servers = self.config.plex_servers
+        self.plex_ssl_context = self.config.ssl_context
         self.output = self.config.output
         self.token = None
         self.logger = None
@@ -184,7 +188,7 @@ class plexInfluxdbCollector():
         active_streams = {}
 
         for server in self.servers:
-            req_uri = 'http://{}:32400/status/sessions'.format(server)
+            req_uri = 'https://{}:32400/status/sessions'.format(server)
 
             self.send_log('Attempting to get all libraries with URL: {}'.format(req_uri), 'info')
 
@@ -192,7 +196,7 @@ class plexInfluxdbCollector():
             self._set_default_headers(req)
 
             try:
-                result = urlopen(req).read().decode('utf-8')
+                result = urlopen(req, context=self.plex_ssl_context).read().decode('utf-8')
             except URLError as e:
                 self.send_log('Failed To Get Current Sessions', 'error')
                 return
@@ -374,13 +378,13 @@ class plexInfluxdbCollector():
         lib_data = {}
 
         for server in self.servers:
-            req_uri = 'http://{}:32400/library/sections'.format(server)
+            req_uri = 'https://{}:32400/library/sections'.format(server)
             self.send_log('Attempting to get all libraries with URL: {}'.format(req_uri), 'info')
             req = Request(req_uri)
             req = self._set_default_headers(req)
 
             try:
-                result = urlopen(req).read().decode('utf-8')
+                result = urlopen(req, context=self.plex_ssl_context).read().decode('utf-8')
             except (URLError, RemoteDisconnected) as e:
                 self.send_log('ERROR: Failed To Get Library Data From {}'.format(req_uri), 'error')
                 return
@@ -395,13 +399,13 @@ class plexInfluxdbCollector():
                 self.send_log('Scanning libraries on server {} with keys {}'.format(server, ','.join(lib_keys)), 'info')
 
                 for key in lib_keys:
-                    req_uri = 'http://{}:32400/library/sections/{}/all'.format(server, key)
+                    req_uri = 'https://{}:32400/library/sections/{}/all'.format(server, key)
                     self.send_log('Attempting to get library {} with URL: {}'.format(key, req_uri), 'info')
                     req = Request(req_uri)
                     req = self._set_default_headers(req)
 
                     try:
-                        result = urlopen(req).read().decode('utf-8')
+                        result = urlopen(req, context=self.plex_ssl_context).read().decode('utf-8')
                     except URLError as e:
                         self.send_log('Failed to get library {}.  {}'.format(key, e), 'error')
                         continue
@@ -509,6 +513,7 @@ class configManager():
             sys.exit(1)
 
         self._load_config_values()
+        self._create_ssl_context()
         self._validate_plex_servers()
         self._validate_logging_level()
         if not self.silent:
@@ -536,6 +541,7 @@ class configManager():
         self.plex_user = self.config['PLEX']['Username']
         self.plex_password = self.config['PLEX'].get('Password', raw=True)
         servers = len(self.config['PLEX']['Servers'])
+        self.plex_verify_ssl = self.config['PLEX'].getboolean('Verify_SSL', fallback=True)
 
         #Logging
         self.logging = self.config['LOGGING'].getboolean('Enable', fallback=False)
@@ -550,6 +556,12 @@ class configManager():
             print('ERROR: No Plex Servers Provided.  Aborting')
             sys.exit(1)
 
+    def _create_ssl_context(self):
+        if self.plex_verify_ssl:
+            self.ssl_context = ssl._create_default_https_context()
+        else:
+            self.ssl_context = ssl._create_unverified_context()
+
     def _validate_plex_servers(self):
         """
         Make sure the servers provided in the config can be resolved.  Abort if they can't
@@ -557,9 +569,9 @@ class configManager():
         """
         failed_servers = []
         for server in self.plex_servers:
-            server_url = 'http://{}:32400'.format(server)
+            server_url = 'https://{}:32400'.format(server)
             try:
-                urlopen(server_url)
+                urlopen(server_url, context=self.ssl_context)
             except URLError as e:
                 # If it's 401 it's a valid server but we're not authorized yet
                 if hasattr(e, 'code') and e.code == 401:
