@@ -1,4 +1,4 @@
-#!/usr/bin/evn python3
+#!/usr/bin/env python3
 
 from urllib.request import Request, urlopen
 import ssl
