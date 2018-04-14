@@ -29,6 +29,7 @@ class plexInfluxdbCollector():
         self.config = configManager(silent, config=config)
 
         self.servers = self.config.plex_servers
+        self.tv_libraries = self.config.tv_libraries
         self.plex_ssl_context = self.config.ssl_context
         self.output = self.config.output
         self.token = None
@@ -415,7 +416,7 @@ class plexInfluxdbCollector():
                         'name': lib_root.attrib['librarySectionTitle'],
                         'items': len(lib_root)
                     }
-                    if lib_root.attrib['librarySectionTitle'] == "TV Shows":
+                    if lib_root.attrib['librarySectionTitle'] in self.tv_libraries:
                         host_lib['episodes'] = 0
                         host_lib['seasons'] = 0
                         for show in lib_root:
@@ -541,6 +542,7 @@ class configManager():
         self.plex_user = self.config['PLEX']['Username']
         self.plex_password = self.config['PLEX'].get('Password', raw=True)
         servers = len(self.config['PLEX']['Servers'])
+        self.tv_libraries = self.config['PLEX']['TV_Libraries'].split(',')
         self.plex_verify_ssl = self.config['PLEX'].getboolean('Verify_SSL', fallback=True)
 
         #Logging
