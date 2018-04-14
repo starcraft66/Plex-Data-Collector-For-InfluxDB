@@ -288,7 +288,7 @@ class plexInfluxdbCollector():
                     full_title = stream.attrib['title']
 
                 if media_type != 'Music':
-                    resolution = stream.find('Media').attrib['videoResolution'] + 'p'
+                    resolution = stream.find('Media').attrib['videoResolution']
                 else:
                     resolution = stream.find('Media').attrib['bitrate'] + 'Kbps'
 
